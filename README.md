@@ -26,23 +26,39 @@ winget install Rustlang.Rustup
 
 Follow the prompts, then open a new terminal so `cargo` is on your `PATH`.
 
-**Any OS, once `rustup` is installed**
+**Rust version**
 
-This project pins an exact toolchain version. Install it with:
+The project requires Rust **1.85 or newer** (edition 2024) and is tested with Rust 1.85.1 and 1.98.1. Any current stable toolchain works. To use the minimum supported version explicitly:
 
 ```sh
-rustup toolchain install 1.98.1
+rustup toolchain install 1.85
 ```
+
+and prefix the `cargo` commands below with `cargo +1.85`.
 
 ### Build and run
 
-With that toolchain installed, run:
+Build an optimized binary once:
 
 ```sh
-cargo +1.98.1 --quiet run -- path/to/requests.jsonl
+cargo build --release
 ```
 
+Then run it against a log file:
+
+```sh
+./target/release/api-traffic-report path/to/requests.jsonl
+```
+
+On Windows the binary is `.\target\release\api-traffic-report.exe`.
+
 The command accepts exactly one positional file path. It writes exactly one JSON document followed by a newline to standard output for every readable file. Invalid command lines and unreadable files write a diagnostic to standard error, exit non-zero, and do not write a report.
+
+### Test
+
+```sh
+cargo test
+```
 
 ## End-to-end design
 
