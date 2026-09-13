@@ -54,6 +54,13 @@ struct ClientBucketKey {
     bucket: i64,
 }
 
+/// One client's rate-limit totals, summed across its violating buckets.
+#[derive(Default)]
+struct RateLimitTally {
+    violating_bucket_count: u64,
+    excess_request_count: u64,
+}
+
 /// Streaming accumulator that folds each parsed line into the running aggregates.
 #[derive(Default)]
 pub(super) struct ReportAccumulator {
@@ -109,12 +116,12 @@ impl ReportAccumulator {
             })
             .collect();
 
-        let mut client_rate_counts: BTreeMap<ClientId, (u64, u64)> = BTreeMap::new();
+        let mut rate_limit_tallies: BTreeMap<ClientId, RateLimitTally> = BTreeMap::new();
         for (key, count) in self.bucket_counts {
             if count > REQUESTS_PER_BUCKET {
-                let entry = client_rate_counts.entry(key.client_id).or_insert((0, 0));
-                entry.0 += 1;
-                entry.1 += count - REQUESTS_PER_BUCKET;
+                let tally = rate_limit_tallies.entry(key.client_id).or_default();
+                tally.violating_bucket_count += 1;
+                tally.excess_request_count += count - REQUESTS_PER_BUCKET;
             }
         }
 
@@ -124,28 +131,23 @@ impl ReportAccumulator {
             valid_request_count: self.valid_request_count,
             malformed_input_count: self.malformed_input_count,
             ignored_blank_line_count: self.ignored_blank_line_count,
-            client_bucket_rate_limit_violation_count: client_rate_counts
+            client_bucket_rate_limit_violation_count: rate_limit_tallies
                 .values()
-                .map(|(violations, _)| violations)
+                .map(|tally| tally.violating_bucket_count)
                 .sum(),
-            rate_limit_excess_request_count: client_rate_counts
+            rate_limit_excess_request_count: rate_limit_tallies
                 .values()
-                .map(|(_, excess)| excess)
+                .map(|tally| tally.excess_request_count)
                 .sum(),
-            rate_limit_violating_clients: client_rate_counts.keys().cloned().collect(),
+            rate_limit_violating_clients: rate_limit_tallies.keys().cloned().collect(),
             request_counts_by_client_endpoint_status,
-            rate_limit_counts_by_client: client_rate_counts
+            rate_limit_counts_by_client: rate_limit_tallies
                 .into_iter()
-                .map(
-                    |(
-                        client_id,
-                        (client_bucket_rate_limit_violation_count, rate_limit_excess_request_count),
-                    )| ClientRateLimitCount {
-                        client_id,
-                        client_bucket_rate_limit_violation_count,
-                        rate_limit_excess_request_count,
-                    },
-                )
+                .map(|(client_id, tally)| ClientRateLimitCount {
+                    client_id,
+                    client_bucket_rate_limit_violation_count: tally.violating_bucket_count,
+                    rate_limit_excess_request_count: tally.excess_request_count,
+                })
                 .collect(),
         }
     }
