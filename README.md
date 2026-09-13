@@ -178,7 +178,7 @@ This is the active decision log for the exercise. It records deliberate interpre
 - Generate a larger deterministic data set within a test to exercise aggregation at greater volume.
 - Do not add fuzz testing in this exercise.
 
-## AI assistance disclosure
+## AI usage
 
 - Codex/Claude/AI assisted with requirement analysis, paired-TDD coordination, and implementation. The work remains subject to user review.
 - Design/Requirements: Used [grill-with-docs](https://www.aihero.dev/skills-grill-with-docs) skill to ensure agent was aligned with my understanding on requirements before implementation.
