@@ -27,10 +27,9 @@ impl RequestRecord {
         let endpoint = object.get("endpoint")?.as_str()?;
         let status_code = object.get("status_code")?.as_u64()?;
 
-        if request_id.is_empty()
-            || timestamp.is_empty()
-            || client_id.is_empty()
-            || endpoint.is_empty()
+        if [request_id, timestamp, client_id, endpoint]
+            .iter()
+            .any(|value| value.trim().is_empty())
             || !HTTP_STATUS_CODES.contains(&status_code)
         {
             return None;

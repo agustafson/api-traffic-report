@@ -416,3 +416,40 @@ fn counts_identical_valid_records_independently() {
         }),
     );
 }
+
+#[test]
+fn rejects_whitespace_only_required_strings_and_keeps_padded_values_verbatim() {
+    let input = concat!(
+        r#"{"request_id":" ","timestamp":"2024-01-15T10:00:00Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"blank_client","timestamp":"2024-01-15T10:00:01Z","client_id":"   ","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"blank_endpoint","timestamp":"2024-01-15T10:00:02Z","client_id":"acct_1","endpoint":"\t","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"padded_client","timestamp":"2024-01-15T10:00:03Z","client_id":" acct_1 ","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+    );
+
+    let output = run_report(input);
+
+    assert_report(
+        output,
+        json!({
+            "total_line_count": 4,
+            "processed_line_count": 4,
+            "valid_request_count": 1,
+            "malformed_input_count": 3,
+            "ignored_blank_line_count": 0,
+            "client_bucket_rate_limit_violation_count": 0,
+            "rate_limit_excess_request_count": 0,
+            "rate_limit_violating_clients": [],
+            "request_counts_by_client_endpoint_status": [{
+                "client_id": " acct_1 ",
+                "endpoint": "/v1/widgets",
+                "status_code": 200,
+                "request_count": 1,
+            }],
+            "rate_limit_counts_by_client": [],
+        }),
+    );
+}
