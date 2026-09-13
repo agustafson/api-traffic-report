@@ -7,7 +7,7 @@ A command-line program that reads one JSON Lines API request log and writes one 
 The Cargo manifest requires Rust **1.98.1**. With that toolchain installed, run:
 
 ```sh
-cargo +1.98.1 run -- path/to/requests.jsonl
+cargo +1.98.1 --quiet run -- path/to/requests.jsonl
 ```
 
 The command accepts exactly one positional file path. It writes exactly one JSON document followed by a newline to standard output for every readable file. Invalid command lines and unreadable files write a diagnostic to standard error, exit non-zero, and do not write a report.
