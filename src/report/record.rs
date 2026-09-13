@@ -31,7 +31,7 @@ impl RequestRecord {
             || timestamp.is_empty()
             || client_id.is_empty()
             || endpoint.is_empty()
-            || !(HTTP_STATUS_CODES).contains(&status_code)
+            || !HTTP_STATUS_CODES.contains(&status_code)
         {
             return None;
         }
