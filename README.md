@@ -73,7 +73,7 @@ This keeps the public interface deliberately small: the input file path, process
 
 - One globally configured policy applies to every client: at most five requests per fixed, UTC-aligned ten-second bucket. A bucket includes its start and excludes its end, so `10:00:00` up to but excluding `10:00:10` is one bucket.
 - A bucket with more than five requests is one violation, and each request above five in it is an excess request.
-- A client is evaluated across every endpoint and provider.
+- A client is evaluated across all of its endpoints together, whichever upstream provider logged each request.
 - Version 1 does not need command-line configuration or a configuration file.
 
 ### Why this rule
@@ -142,7 +142,7 @@ This is the active decision log for the exercise. It records deliberate interpre
 
 - **Input contract:** The program accepts one required positional log-file path. Standard input is not an input mode. File and command-line errors are reported on standard error with a non-zero exit status.
 - **Client identity:** `client_id` is globally consistent across all upstream providers. A client rate limit therefore covers that client's traffic across every endpoint and provider.
-- **Request ID scope**: `request_id` is not assumed globally unique across upstream providers; it may be unique only within a provider. Because the input has no provider identifier, v1 treats `request_id` as opaque and does not deduplicate records.
+- **Request ID scope:** `request_id` is not assumed globally unique across upstream providers; it may be unique only within a provider. Because the input has no provider identifier, v1 treats `request_id` as opaque and does not deduplicate records.
 - **Rate-limit reporting:** The report distinguishes client-time-bucket violations from excess requests. A violating client bucket is counted once when its request count exceeds five; its excess request count is the amount above five. Neither metric claims that an upstream request was blocked.
 - **Traffic aggregation:** Request counts are grouped by the exact `client_id`, `endpoint`, and `status_code` combination. The traffic cube contains only those grouping keys and `request_count`; report consumers can roll its rows up to client, endpoint, or status-code views as needed. Client-wide rate-limit metrics remain in a separate client summary because the policy covers all client endpoints together.
 - **Malformed input:** A nonblank line is malformed and ignored when it exceeds 4 KiB (4,096 bytes, excluding its LF terminator), is not a JSON object, omits a required field, gives a field the wrong type, gives a required string that is empty or whitespace-only, contains an invalid RFC 3339 timestamp, or gives a status code outside 100 through 599. The line limit leaves several times the expected space for request IDs, client IDs, and endpoints of up to roughly 256 characters each. Unknown extra fields are accepted within that limit. The endpoint needs no syntax validation beyond being non-blank.
@@ -167,7 +167,7 @@ This is the active decision log for the exercise. It records deliberate interpre
 - Support bounded-memory aggregation for exceptionally high-cardinality clients and traffic groups, such as an external store or sorted spill files: a file with millions of distinct (client, endpoint, status) groups or (client, UTC bucket) pairs creates millions of map entries, potentially approaching raw-file memory use.
 - Externalise configuration such as parameters for rate-limiting.
 - Extend the deterministic end-to-end coverage with additional reviewable fixtures for every malformed field.
-- Add `AGENTS.md`, `CLAUDE.md` & `CODING_STANDARDS.md` to store AI & huma guidance for the codebase. 
+- Add `AGENTS.md`, `CLAUDE.md` & `CODING_STANDARDS.md` to store AI & human guidance for the codebase.
 - Parallel file processing: Split JSONL only on line boundaries, let workers build local aggregates, then merge. For the current fixed-bucket policy, merging (client_id, bucket) counts before evaluating the limit is correct. Sharding by client_id is even better: every client’s rate state lands on one worker.
 - Persistence: if reports need to be generated later or over a continuous stream. Store either raw normalized request events, aggregates, or both. Raw events preserve flexibility for new analyses; bucketed aggregates cost less but cannot answer arbitrary new questions later.
 
@@ -181,4 +181,4 @@ This is the active decision log for the exercise. It records deliberate interpre
 ## AI assistance disclosure
 
 - Codex/Claude/AI assisted with requirement analysis, paired-TDD coordination, and implementation. The work remains subject to user review.
-- Used a custom [agustafson/skills/tdd-pair](https://github.com/agustafson/skills/tree/main/tdd-pair) skill which uses separate agents to write the tests and implementation. 
+- Used a custom [agustafson/skills/tdd-pair](https://github.com/agustafson/skills/tree/main/tdd-pair) skill which uses separate agents to write the tests and implementation.
