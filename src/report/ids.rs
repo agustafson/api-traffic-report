@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 
-/// The `client_id` a request log attributes to a caller.
+/// The `client_id` a request log attributes to a client.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(transparent)]
 pub(super) struct ClientId(String);

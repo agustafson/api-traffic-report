@@ -1,6 +1,6 @@
 # API Traffic Reporting
 
-This context turns provider-produced API request logs into a report of observed traffic, input quality, and client rate-limit breaches.
+This context turns provider-produced API request logs into a report of observed traffic, input quality, and client rate-limit violations.
 
 ## Language
 

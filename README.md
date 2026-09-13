@@ -88,7 +88,7 @@ This is the active decision log for the exercise. It records deliberate interpre
 
 ## Future improvements
 
-- Support client-specific rate-limit policies via alternate strategies.
+- Support client-specific rate-limit policies.
 - Add source-aware idempotency or duplicate detection.
 - Support bounded-memory aggregation for exceptionally high-cardinality clients and traffic groups, such as an external store or sorted spill files: a file with millions of distinct (client, endpoint, status) groups or (client, UTC bucket) pairs creates millions of map entries, potentially approaching raw-file memory use.
 - Externalise configuration such as parameters for rate-limiting.
