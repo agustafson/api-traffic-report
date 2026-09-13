@@ -141,15 +141,15 @@ This is the active decision log for the exercise. It records deliberate interpre
 - Add source-aware idempotency or duplicate detection.
 - Support bounded-memory aggregation for exceptionally high-cardinality clients and traffic groups, such as an external store or sorted spill files: a file with millions of distinct (client, endpoint, status) groups or (client, UTC bucket) pairs creates millions of map entries, potentially approaching raw-file memory use.
 - Externalise configuration such as parameters for rate-limiting.
-- Extend the deterministic end-to-end coverage with additional reviewable fixtures for every malformed field and bucket boundary.
+- Extend the deterministic end-to-end coverage with additional reviewable fixtures for every malformed field.
 - Add `AGENTS.md`, `CLAUDE.md` & `CODING_STANDARDS.md` to store AI & huma guidance for the codebase. 
 - Parallel file processing: Split JSONL only on line boundaries, let workers build local aggregates, then merge. For the current fixed-bucket policy, merging (client_id, bucket) counts before evaluating the limit is correct. Sharding by client_id is even better: every client’s rate state lands on one worker.
 - Persistence: if reports need to be generated later or over a continuous stream. Store either raw normalized request events, aggregates, or both. Raw events preserve flexibility for new analyses; bucketed aggregates cost less but cannot answer arbitrary new questions later.
 
 ## Verification approach
 
-- Cover the public command-line contract with simple end-to-end integration tests.
-- Keep named JSON Lines fixtures small and reviewable, including the supplied example and boundary or malformed-input cases.
+- Cover the public command-line contract with simple end-to-end integration tests, run with `cargo test`.
+- Keep named JSON Lines fixtures small and reviewable, including the supplied example and boundary or malformed-input cases such as CRLF line endings, a byte order mark, fractional and lowercase timestamps, bursts across a bucket boundary, and blank required strings.
 - Generate a larger deterministic data set within a test to exercise aggregation at greater volume.
 - Do not add fuzz testing in this exercise.
 

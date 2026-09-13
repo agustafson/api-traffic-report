@@ -418,6 +418,180 @@ fn counts_identical_valid_records_independently() {
 }
 
 #[test]
+fn reports_zero_counts_for_an_empty_file() {
+    let output = run_report("");
+
+    assert_report(
+        output,
+        json!({
+            "total_line_count": 0,
+            "processed_line_count": 0,
+            "valid_request_count": 0,
+            "malformed_input_count": 0,
+            "ignored_blank_line_count": 0,
+            "client_bucket_rate_limit_violation_count": 0,
+            "rate_limit_excess_request_count": 0,
+            "rate_limit_violating_clients": [],
+            "request_counts_by_client_endpoint_status": [],
+            "rate_limit_counts_by_client": [],
+        }),
+    );
+}
+
+#[test]
+fn accepts_crlf_line_endings_and_counts_crlf_blank_lines() {
+    let input = concat!(
+        r#"{"request_id":"crlf_1","timestamp":"2024-01-15T10:00:00Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\r\n",
+        "\r\n",
+        r#"{"request_id":"crlf_2","timestamp":"2024-01-15T10:00:01Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\r\n",
+    );
+
+    let output = run_report(input);
+
+    assert_report(
+        output,
+        json!({
+            "total_line_count": 3,
+            "processed_line_count": 2,
+            "valid_request_count": 2,
+            "malformed_input_count": 0,
+            "ignored_blank_line_count": 1,
+            "client_bucket_rate_limit_violation_count": 0,
+            "rate_limit_excess_request_count": 0,
+            "rate_limit_violating_clients": [],
+            "request_counts_by_client_endpoint_status": [{
+                "client_id": "acct_1",
+                "endpoint": "/v1/widgets",
+                "status_code": 200,
+                "request_count": 2,
+            }],
+            "rate_limit_counts_by_client": [],
+        }),
+    );
+}
+
+#[test]
+fn treats_a_byte_order_mark_as_part_of_a_malformed_first_line() {
+    let input = concat!(
+        "\u{feff}",
+        r#"{"request_id":"bom_1","timestamp":"2024-01-15T10:00:00Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"after_bom","timestamp":"2024-01-15T10:00:01Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+    );
+
+    let output = run_report(input);
+
+    assert_report(
+        output,
+        json!({
+            "total_line_count": 2,
+            "processed_line_count": 2,
+            "valid_request_count": 1,
+            "malformed_input_count": 1,
+            "ignored_blank_line_count": 0,
+            "client_bucket_rate_limit_violation_count": 0,
+            "rate_limit_excess_request_count": 0,
+            "rate_limit_violating_clients": [],
+            "request_counts_by_client_endpoint_status": [{
+                "client_id": "acct_1",
+                "endpoint": "/v1/widgets",
+                "status_code": 200,
+                "request_count": 1,
+            }],
+            "rate_limit_counts_by_client": [],
+        }),
+    );
+}
+
+#[test]
+fn buckets_fractional_and_lowercase_timestamps_by_utc_second() {
+    let input = concat!(
+        r#"{"request_id":"f1","timestamp":"2024-01-15t10:00:00z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"f2","timestamp":"2024-01-15T10:00:01.5Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"f3","timestamp":"2024-01-15t10:00:03.25z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"f4","timestamp":"2024-01-15T15:30:05.125+05:30","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"f5","timestamp":"2024-01-15T10:00:07.000000001Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"f6","timestamp":"2024-01-15T10:00:09.999999999Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+        r#"{"request_id":"f7","timestamp":"2024-01-15T10:00:10.000Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
+        "\n",
+    );
+
+    let output = run_report(input);
+
+    assert_report(
+        output,
+        json!({
+            "total_line_count": 7,
+            "processed_line_count": 7,
+            "valid_request_count": 7,
+            "malformed_input_count": 0,
+            "ignored_blank_line_count": 0,
+            "client_bucket_rate_limit_violation_count": 1,
+            "rate_limit_excess_request_count": 1,
+            "rate_limit_violating_clients": ["acct_1"],
+            "request_counts_by_client_endpoint_status": [{
+                "client_id": "acct_1",
+                "endpoint": "/v1/widgets",
+                "status_code": 200,
+                "request_count": 7,
+            }],
+            "rate_limit_counts_by_client": [{
+                "client_id": "acct_1",
+                "client_bucket_rate_limit_violation_count": 1,
+                "rate_limit_excess_request_count": 1,
+            }],
+        }),
+    );
+}
+
+/// Documents the known fixed-bucket tradeoff: a burst split across a bucket boundary is not flagged.
+#[test]
+fn does_not_flag_a_burst_split_across_a_bucket_boundary() {
+    let mut input = String::new();
+    for (index, timestamp) in ["2024-01-15T10:00:09.900Z"; 5]
+        .into_iter()
+        .chain(["2024-01-15T10:00:10Z"; 5])
+        .enumerate()
+    {
+        input.push_str(&format!(
+            "{{\"request_id\":\"edge_{index}\",\"timestamp\":\"{timestamp}\",\"client_id\":\"acct_1\",\"endpoint\":\"/v1/widgets\",\"status_code\":200}}\n",
+        ));
+    }
+
+    let output = run_report(&input);
+
+    assert_report(
+        output,
+        json!({
+            "total_line_count": 10,
+            "processed_line_count": 10,
+            "valid_request_count": 10,
+            "malformed_input_count": 0,
+            "ignored_blank_line_count": 0,
+            "client_bucket_rate_limit_violation_count": 0,
+            "rate_limit_excess_request_count": 0,
+            "rate_limit_violating_clients": [],
+            "request_counts_by_client_endpoint_status": [{
+                "client_id": "acct_1",
+                "endpoint": "/v1/widgets",
+                "status_code": 200,
+                "request_count": 10,
+            }],
+            "rate_limit_counts_by_client": [],
+        }),
+    );
+}
+
+#[test]
 fn rejects_whitespace_only_required_strings_and_keeps_padded_values_verbatim() {
     let input = concat!(
         r#"{"request_id":" ","timestamp":"2024-01-15T10:00:00Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#,
