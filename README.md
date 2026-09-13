@@ -70,10 +70,28 @@ cargo test
 This keeps the public interface deliberately small: the input file path, process exit status, standard output JSON, and standard error diagnostics are the complete CLI contract.
 
 ## Rate-limit rules
-- One globally configured policy applies to every client.
-- Version 1 does not need command-line configuration or a configuration file.
-- The limit is five requests per fixed, UTC-aligned ten-second bucket, with a bucket start included and its end excluded. Calibrated at this level so the sample flags `acct_1`.
+
+- One globally configured policy applies to every client: at most five requests per fixed, UTC-aligned ten-second bucket. A bucket includes its start and excludes its end, so `10:00:00` up to but excluding `10:00:10` is one bucket.
+- A bucket with more than five requests is one violation, and each request above five in it is an excess request.
 - A client is evaluated across every endpoint and provider.
+- Version 1 does not need command-line configuration or a configuration file.
+
+### Why this rule
+
+- **Five requests per ten seconds:** calibrated so the supplied sample flags `acct_1` (six requests in eight seconds) and not `acct_2`.
+- **Client-wide:** `client_id` is globally consistent across upstream providers, so a client-wide policy is meaningful even when a client's requests are logged by different providers, and it catches bursts spread across endpoints.
+- **Fixed buckets:** simple, deterministic, and directly explainable in a report. Bucket counts do not depend on input order, which matters because third-party logs may be out of order. Counts for the same `(client_id, bucket)` can be summed across files or workers before the limit is evaluated. Only one counter per active client bucket is retained, not per-request timestamps.
+
+### Tradeoff: bursts across a bucket boundary
+
+Fixed buckets reset at each boundary, so a client can send up to twice the limit in a short span that straddles one. Five requests at `10:00:09.9` and five at `10:00:10.0` are ten requests in 100 ms, yet neither bucket exceeds five, so no violation is reported. A test pins this behaviour.
+
+The alternatives close that gap at a cost:
+
+- **Sliding window:** flags any ten-second span containing more than five requests. It is exact, but it needs each client's requests in timestamp order, which for unordered input means holding and sorting their timestamps.
+- **Token bucket:** each client holds up to five tokens that refill at 0.5 per second, and a request that finds no token is a violation. It permits short bursts while enforcing a steady rate with only one small state per client, but it also needs each client's requests in timestamp order, and partial results from separate workers cannot simply be summed.
+
+For an offline report over unordered third-party logs, fixed buckets were chosen for order independence and mergeability, accepting the boundary blind spot.
 
 ## JSON report schema
 
@@ -118,7 +136,6 @@ This is the active decision log for the exercise. It records deliberate interpre
 - **Input contract:** The program accepts one required positional log-file path. Standard input is not an input mode. File and command-line errors are reported on standard error with a non-zero exit status.
 - **Client identity:** `client_id` is globally consistent across all upstream providers. A client rate limit therefore covers that client's traffic across every endpoint and provider.
 - **Request ID scope**: `request_id` is not assumed globally unique across upstream providers; it may be unique only within a provider. Because the input has no provider identifier, v1 treats `request_id` as opaque and does not deduplicate records.
-- **Why this policy:** A globally consistent client identity makes a client-wide policy meaningful even when requests arrive from different providers. A fixed UTC-aligned ten-second bucket makes the first version simple, deterministic, and directly explainable in a report while still detecting bursts across endpoints.
 - **Rate-limit reporting:** The report distinguishes client-time-bucket violations from excess requests. A violating client bucket is counted once when its request count exceeds five; its excess request count is the amount above five. Neither metric claims that an upstream request was blocked.
 - **Traffic aggregation:** Request counts are grouped by the exact `client_id`, `endpoint`, and `status_code` combination. The traffic cube contains only those grouping keys and `request_count`; report consumers can roll its rows up to client, endpoint, or status-code views as needed. Client-wide rate-limit metrics remain in a separate client summary because the policy covers all client endpoints together.
 - **Malformed input:** A nonblank line is malformed and ignored when it exceeds 4 KiB (4,096 bytes, excluding its LF terminator), is not a JSON object, omits a required field, gives a field the wrong type, gives a required string that is empty or whitespace-only, contains an invalid RFC 3339 timestamp, or gives a status code outside 100 through 599. The line limit leaves several times the expected space for request IDs, client IDs, and endpoints of up to roughly 256 characters each. Unknown extra fields are accepted within that limit. The endpoint needs no syntax validation beyond being non-blank.
@@ -138,6 +155,7 @@ This is the active decision log for the exercise. It records deliberate interpre
 ## Future improvements
 
 - Support client-specific rate-limit policies.
+- Offer a sliding-window or token-bucket policy where catching bursts across bucket boundaries matters more than order independence.
 - Add source-aware idempotency or duplicate detection.
 - Support bounded-memory aggregation for exceptionally high-cardinality clients and traffic groups, such as an external store or sorted spill files: a file with millions of distinct (client, endpoint, status) groups or (client, UTC bucket) pairs creates millions of map entries, potentially approaching raw-file memory use.
 - Externalise configuration such as parameters for rate-limiting.
