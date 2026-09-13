@@ -24,7 +24,7 @@ This keeps the public interface deliberately small: the input file path, process
 ## Rate-limit rules
 - One globally configured policy applies to every client.
 - Version 1 does not need command-line configuration or a configuration file.
-- The limit is five requests per fixed, UTC-aligned ten-second bucket, with a bucket start included and its end excluded.
+- The limit is five requests per fixed, UTC-aligned ten-second bucket, with a bucket start included and its end excluded. Calibrated at this level so the sample flags `acct_1`.
 - A client is evaluated across every endpoint and provider.
 
 ## JSON report schema
