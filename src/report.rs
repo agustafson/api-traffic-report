@@ -27,7 +27,7 @@ fn build_report_with_max_line_bytes(
     mut input: impl BufRead,
     max_input_line_bytes: usize,
 ) -> io::Result<Report> {
-    let mut accumulator = ReportAccumulator::new();
+    let mut accumulator = ReportAccumulator::default();
     let mut line = Vec::new();
 
     loop {

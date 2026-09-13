@@ -55,48 +55,31 @@ struct ClientBucketKey {
 }
 
 /// Streaming accumulator that folds each parsed line into the running aggregates.
+#[derive(Default)]
 pub(super) struct ReportAccumulator {
-    report: Report,
+    total_line_count: u64,
+    valid_request_count: u64,
+    malformed_input_count: u64,
+    ignored_blank_line_count: u64,
     request_counts: BTreeMap<RequestGroupKey, u64>,
     bucket_counts: BTreeMap<ClientBucketKey, u64>,
 }
 
 impl ReportAccumulator {
-    pub(super) fn new() -> Self {
-        Self {
-            report: Report {
-                total_line_count: 0,
-                processed_line_count: 0,
-                valid_request_count: 0,
-                malformed_input_count: 0,
-                ignored_blank_line_count: 0,
-                client_bucket_rate_limit_violation_count: 0,
-                rate_limit_excess_request_count: 0,
-                rate_limit_violating_clients: Vec::new(),
-                request_counts_by_client_endpoint_status: Vec::new(),
-                rate_limit_counts_by_client: Vec::new(),
-            },
-            request_counts: BTreeMap::new(),
-            bucket_counts: BTreeMap::new(),
-        }
-    }
-
     pub(super) fn received_line(&mut self) {
-        self.report.total_line_count += 1;
+        self.total_line_count += 1;
     }
 
     pub(super) fn received_blank_line(&mut self) {
-        self.report.ignored_blank_line_count += 1;
+        self.ignored_blank_line_count += 1;
     }
 
     pub(super) fn received_malformed_input(&mut self) {
-        self.report.processed_line_count += 1;
-        self.report.malformed_input_count += 1;
+        self.malformed_input_count += 1;
     }
 
     pub(super) fn add_request(&mut self, record: RequestRecord) {
-        self.report.processed_line_count += 1;
-        self.report.valid_request_count += 1;
+        self.valid_request_count += 1;
         *self
             .request_counts
             .entry(RequestGroupKey {
@@ -114,8 +97,8 @@ impl ReportAccumulator {
             .or_insert(0) += 1;
     }
 
-    pub(super) fn finish(mut self) -> Report {
-        self.report.request_counts_by_client_endpoint_status = self
+    pub(super) fn finish(self) -> Report {
+        let request_counts_by_client_endpoint_status = self
             .request_counts
             .into_iter()
             .map(|(key, request_count)| RequestCount {
@@ -135,27 +118,35 @@ impl ReportAccumulator {
             }
         }
 
-        self.report.client_bucket_rate_limit_violation_count = client_rate_counts
-            .values()
-            .map(|(violations, _)| violations)
-            .sum();
-        self.report.rate_limit_excess_request_count =
-            client_rate_counts.values().map(|(_, excess)| excess).sum();
-        self.report.rate_limit_violating_clients = client_rate_counts.keys().cloned().collect();
-        self.report.rate_limit_counts_by_client = client_rate_counts
-            .into_iter()
-            .map(
-                |(
-                    client_id,
-                    (client_bucket_rate_limit_violation_count, rate_limit_excess_request_count),
-                )| ClientRateLimitCount {
-                    client_id,
-                    client_bucket_rate_limit_violation_count,
-                    rate_limit_excess_request_count,
-                },
-            )
-            .collect();
-
-        self.report
+        Report {
+            total_line_count: self.total_line_count,
+            processed_line_count: self.valid_request_count + self.malformed_input_count,
+            valid_request_count: self.valid_request_count,
+            malformed_input_count: self.malformed_input_count,
+            ignored_blank_line_count: self.ignored_blank_line_count,
+            client_bucket_rate_limit_violation_count: client_rate_counts
+                .values()
+                .map(|(violations, _)| violations)
+                .sum(),
+            rate_limit_excess_request_count: client_rate_counts
+                .values()
+                .map(|(_, excess)| excess)
+                .sum(),
+            rate_limit_violating_clients: client_rate_counts.keys().cloned().collect(),
+            request_counts_by_client_endpoint_status,
+            rate_limit_counts_by_client: client_rate_counts
+                .into_iter()
+                .map(
+                    |(
+                        client_id,
+                        (client_bucket_rate_limit_violation_count, rate_limit_excess_request_count),
+                    )| ClientRateLimitCount {
+                        client_id,
+                        client_bucket_rate_limit_violation_count,
+                        rate_limit_excess_request_count,
+                    },
+                )
+                .collect(),
+        }
     }
 }
