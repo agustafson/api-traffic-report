@@ -15,7 +15,7 @@ The command accepts exactly one positional file path. It writes exactly one JSON
 ## End-to-end design
 
 - The command opens the supplied file and reads it one line at a time.
-- Blank lines are counted and ignored; each nonblank line is parsed as a JSON object and validated as a request record. 
+- Blank lines are counted and ignored; each nonblank line of at most 1 MiB is parsed as a JSON object and validated as a request record. Oversized lines are drained without being retained and counted as malformed.
 - Valid records update two in-memory aggregates: a traffic cube keyed by `(client_id, endpoint, status_code)` and a fixed UTC ten-second bucket count keyed by `(client_id, bucket)`.
 - After the input ends, the bucket counts are reduced into rate-limit summaries and all aggregates are emitted as the report.
 
@@ -73,11 +73,11 @@ This is the active decision log for the exercise. It records deliberate interpre
 - **Why this policy:** A globally consistent client identity makes a client-wide policy meaningful even when requests arrive from different providers. A fixed UTC-aligned ten-second bucket makes the first version simple, deterministic, and directly explainable in a report while still detecting bursts across endpoints.
 - **Rate-limit reporting:** The report distinguishes client-time-bucket violations from excess requests. A violating client bucket is counted once when its request count exceeds five; its excess request count is the amount above five. Neither metric claims that an upstream request was blocked.
 - **Traffic aggregation:** Request counts are grouped by the exact `client_id`, `endpoint`, and `status_code` combination. The traffic cube contains only those grouping keys and `request_count`; report consumers can roll its rows up to client, endpoint, or status-code views as needed. Client-wide rate-limit metrics remain in a separate client summary because the policy covers all client endpoints together.
-- **Malformed input:** A nonblank line is malformed and ignored when it is not a JSON object, omits a required field, gives a field the wrong type or an empty required string, contains an invalid RFC 3339 timestamp, or gives a status code outside 100 through 599. Unknown extra fields are accepted. The endpoint needs no syntax validation beyond being nonempty.
+- **Malformed input:** A nonblank line is malformed and ignored when it exceeds 1 MiB (1,048,576 bytes, excluding its LF terminator), is not a JSON object, omits a required field, gives a field the wrong type or an empty required string, contains an invalid RFC 3339 timestamp, or gives a status code outside 100 through 599. Unknown extra fields are accepted. The endpoint needs no syntax validation beyond being nonempty.
 - **Blank input:** Blank or whitespace-only lines are ignored rather than classified as malformed. The report distinguishes the number of physical lines, nonblank processed lines, and ignored blank lines. A single final line terminator does not make an extra blank line; an additional empty line does.
 - **Duplicate records:** Version 1 counts every valid log record, including duplicate records. Source-aware idempotency or duplicate detection is a future improvement, because duplicate data may otherwise be indistinguishable from a legitimate retry.
 - **Output and failures:** A readable input file always produces exactly one JSON report on standard output, even when it contains malformed records. Command-line or file-access failures write a diagnostic to standard error, exit non-zero, and produce no report.
-- **Aggregation resources:** Version 1 streams the file through a reusable current-line buffer and holds aggregate counts and summaries in memory. Its retained data grows with the number of distinct traffic groups and client-time buckets, rather than with the raw input content; the largest individual line also sets the buffer capacity. Unbounded-cardinality scaling is future work.
+- **Aggregation resources:** Version 1 streams the file through a reusable current-line buffer capped at 1 MiB plus one byte for overflow detection, and holds aggregate counts and summaries in memory. Oversized lines are drained through their line ending without being retained. Aggregate memory grows with the number of distinct traffic groups and client-time buckets, rather than with the raw input content. Unbounded-cardinality scaling is future work.
 
 ## Implementation notes
 

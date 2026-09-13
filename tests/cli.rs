@@ -8,6 +8,7 @@ use std::{
 use serde_json::{Value, json};
 
 static TEMP_FILE_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+const MAX_INPUT_LINE_BYTES: usize = 1024 * 1024;
 
 fn write_log(contents: &str) -> std::path::PathBuf {
     let unique = format!(
@@ -202,6 +203,44 @@ fn counts_blank_and_malformed_lines_without_losing_valid_records() {
             "valid_request_count": 2,
             "malformed_input_count": 6,
             "ignored_blank_line_count": 2,
+            "client_bucket_rate_limit_violation_count": 0,
+            "rate_limit_excess_request_count": 0,
+            "rate_limit_violating_clients": [],
+            "request_counts_by_client_endpoint_status": [{
+                "client_id": "acct_1",
+                "endpoint": "/v1/widgets",
+                "status_code": 200,
+                "request_count": 2,
+            }],
+            "rate_limit_counts_by_client": [],
+        }),
+    );
+}
+
+#[test]
+fn discards_oversized_lines_and_resumes_at_the_next_record() {
+    let prefix = r#"{"request_id":"at_limit","timestamp":"2024-01-15T10:00:00Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200,"padding":""#;
+    let suffix = r#""}"#;
+    let at_limit = format!(
+        "{prefix}{}{suffix}",
+        "x".repeat(MAX_INPUT_LINE_BYTES - prefix.len() - suffix.len()),
+    );
+    assert_eq!(at_limit.len(), MAX_INPUT_LINE_BYTES);
+
+    let oversized = format!("{at_limit} ");
+    let following = r#"{"request_id":"following","timestamp":"2024-01-15T10:00:01Z","client_id":"acct_1","endpoint":"/v1/widgets","status_code":200}"#;
+    let input = format!("{at_limit}\n{oversized}\n{following}\n");
+
+    let output = run_report(&input);
+
+    assert_report(
+        output,
+        json!({
+            "total_line_count": 3,
+            "processed_line_count": 3,
+            "valid_request_count": 2,
+            "malformed_input_count": 1,
+            "ignored_blank_line_count": 0,
             "client_bucket_rate_limit_violation_count": 0,
             "rate_limit_excess_request_count": 0,
             "rate_limit_violating_clients": [],
