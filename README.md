@@ -4,7 +4,39 @@ A command-line program that reads one JSON Lines API request log and writes one 
 
 ## Run
 
-The Cargo manifest requires Rust **1.98.1**. With that toolchain installed, run:
+### Prerequisites
+
+Building and running this program requires the Rust toolchain, which includes `cargo`. If you don't already have it installed:
+
+**macOS or Linux**
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Follow the prompts, then restart your terminal (or run `source "$HOME/.cargo/env"`) so `cargo` is on your `PATH`.
+
+**Windows**
+
+Download and run [`rustup-init.exe`](https://win.rustup.rs) from the official Rust site, or, with `winget`:
+
+```powershell
+winget install Rustlang.Rustup
+```
+
+Follow the prompts, then open a new terminal so `cargo` is on your `PATH`.
+
+**Any OS, once `rustup` is installed**
+
+This project pins an exact toolchain version. Install it with:
+
+```sh
+rustup toolchain install 1.98.1
+```
+
+### Build and run
+
+With that toolchain installed, run:
 
 ```sh
 cargo +1.98.1 --quiet run -- path/to/requests.jsonl
