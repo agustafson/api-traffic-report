@@ -181,4 +181,5 @@ This is the active decision log for the exercise. It records deliberate interpre
 ## AI assistance disclosure
 
 - Codex/Claude/AI assisted with requirement analysis, paired-TDD coordination, and implementation. The work remains subject to user review.
-- Used a custom [agustafson/skills/tdd-pair](https://github.com/agustafson/skills/tree/main/tdd-pair) skill which uses separate agents to write the tests and implementation.
+- Design/Requirements: Used [grill-with-docs](https://www.aihero.dev/skills-grill-with-docs) skill to ensure agent was aligned with my understanding on requirements before implementation.
+- Implementation: Used a custom [agustafson/skills/tdd-pair](https://github.com/agustafson/skills/tree/main/tdd-pair) skill which uses separate agents to write the tests and implementation.
