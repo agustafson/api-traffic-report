@@ -13,14 +13,14 @@ pub(crate) use aggregate::Report;
 
 const REQUESTS_PER_BUCKET: u64 = 5;
 const BUCKET_SECONDS: i64 = 10;
-const MAX_INPUT_LINE_BYTES: usize = 1024 * 1024;
+const DEFAULT_MAX_INPUT_LINE_BYTES: usize = 4 * 1024;
 
 /// Builds the complete traffic report from a JSON Lines input stream.
 ///
 /// The returned report preserves the documented deterministic ordering and
 /// counts malformed and blank input according to the CLI contract.
 pub(crate) fn build_report(input: impl BufRead) -> io::Result<Report> {
-    build_report_with_max_line_bytes(input, MAX_INPUT_LINE_BYTES)
+    build_report_with_max_line_bytes(input, DEFAULT_MAX_INPUT_LINE_BYTES)
 }
 
 fn build_report_with_max_line_bytes(
