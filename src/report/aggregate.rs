@@ -17,6 +17,7 @@ pub(crate) struct Report {
     ignored_blank_line_count: u64,
     client_bucket_rate_limit_violation_count: u64,
     rate_limit_excess_request_count: u64,
+    /// The clients in `rate_limit_counts_by_client`, for consumers that only need to know who violated the policy.
     rate_limit_violating_clients: Vec<ClientId>,
     request_counts_by_client_endpoint_status: Vec<RequestCount>,
     rate_limit_counts_by_client: Vec<ClientRateLimitCount>,

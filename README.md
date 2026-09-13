@@ -93,41 +93,48 @@ The alternatives close that gap at a cost:
 
 For an offline report over unordered third-party logs, fixed buckets were chosen for order independence and mergeability, accepting the boundary blind spot.
 
-## JSON report schema
+## JSON report specification
 
 The report is one compact JSON object with fields emitted in this order:
 
+| Field | Type | Meaning |
+|---|---|---|
+| `total_line_count` | integer | Physical lines in the file. A single final line terminator does not add a line. |
+| `processed_line_count` | integer | Nonblank lines examined as request records. Equals `valid_request_count + malformed_input_count`. |
+| `valid_request_count` | integer | Lines that produced a valid request record. |
+| `malformed_input_count` | integer | Nonblank lines discarded as malformed. |
+| `ignored_blank_line_count` | integer | Empty or whitespace-only lines, which are ignored rather than counted as malformed. |
+| `client_bucket_rate_limit_violation_count` | integer | Client buckets, across all clients, with more than five requests. |
+| `rate_limit_excess_request_count` | integer | Requests above five, summed over all violating client buckets. |
+| `rate_limit_violating_clients` | array of strings | Clients with at least one violating bucket. |
+| `request_counts_by_client_endpoint_status` | array of objects | One `{client_id, endpoint, status_code, request_count}` row per distinct combination of valid requests. |
+| `rate_limit_counts_by_client` | array of objects | One `{client_id, client_bucket_rate_limit_violation_count, rate_limit_excess_request_count}` row per violating client. |
+
+All count fields are nonnegative integers. The arrays are deterministic: `rate_limit_violating_clients` and `rate_limit_counts_by_client` are sorted by ascending `client_id`, and `request_counts_by_client_endpoint_status` is sorted by ascending `(client_id, endpoint, status_code)`.
+
+`rate_limit_violating_clients` lists the same clients as `rate_limit_counts_by_client`. It is kept as a direct answer to "which clients violated the rate limit?", so consumers that only need to alert on or look up offending clients do not have to project the detailed rows.
+
+For the supplied `sample_input/requests.jsonl`, the program writes the following report (pretty-printed here; the program emits it on one line):
+
 ```json
 {
-  "total_line_count": 0,
-  "processed_line_count": 0,
-  "valid_request_count": 0,
+  "total_line_count": 8,
+  "processed_line_count": 8,
+  "valid_request_count": 8,
   "malformed_input_count": 0,
   "ignored_blank_line_count": 0,
-  "client_bucket_rate_limit_violation_count": 0,
-  "rate_limit_excess_request_count": 0,
-  "rate_limit_violating_clients": ["client_id"],
+  "client_bucket_rate_limit_violation_count": 1,
+  "rate_limit_excess_request_count": 1,
+  "rate_limit_violating_clients": ["acct_1"],
   "request_counts_by_client_endpoint_status": [
-    {
-      "client_id": "client_id",
-      "endpoint": "/endpoint",
-      "status_code": 200,
-      "request_count": 0
-    }
+    {"client_id": "acct_1", "endpoint": "/v1/widgets", "status_code": 200, "request_count": 6},
+    {"client_id": "acct_2", "endpoint": "/v1/reports", "status_code": 200, "request_count": 2}
   ],
   "rate_limit_counts_by_client": [
-    {
-      "client_id": "client_id",
-      "client_bucket_rate_limit_violation_count": 0,
-      "rate_limit_excess_request_count": 0
-    }
+    {"client_id": "acct_1", "client_bucket_rate_limit_violation_count": 1, "rate_limit_excess_request_count": 1}
   ]
 }
 ```
-
-All count fields are nonnegative integers. `total_line_count` counts physical lines, `processed_line_count` counts the nonblank lines examined as JSON, and `valid_request_count` plus `malformed_input_count` equals `processed_line_count`.
-
-The arrays are deterministic: `rate_limit_violating_clients` and `rate_limit_counts_by_client` are sorted by ascending `client_id`; `request_counts_by_client_endpoint_status` is sorted by ascending `(client_id, endpoint, status_code)`. The per-client rate array includes only clients with at least one violating bucket.
 
 ## Assumptions and decisions
 
