@@ -159,7 +159,7 @@ This is the active decision log for the exercise. It records deliberate interpre
 - A record must have non-blank string `request_id`, `timestamp`, `client_id`, and `endpoint` fields, plus an integral status code from 100 through 599. Extra object fields are retained by neither the validation nor the report.
 - The implementation deliberately counts valid duplicate lines independently. It reports observed input rather than claiming an upstream system accepted or rejected any particular request.
 
-## Future improvements
+## Future improvements - What would be done differently with more time
 
 - Support client-specific rate-limit policies.
 - Offer a sliding-window or token-bucket policy where catching bursts across bucket boundaries matters more than order independence.
