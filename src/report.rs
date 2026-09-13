@@ -23,17 +23,17 @@ pub(crate) fn build_report(mut input: impl BufRead) -> io::Result<Report> {
     let mut line = Vec::new();
 
     while input.read_until(b'\n', &mut line)? != 0 {
-        accumulator.increment_line_count();
+        accumulator.received_line();
         if line.last() == Some(&b'\n') {
             line.pop();
         }
 
         if is_blank(&line) {
-            accumulator.increment_blank_line_count();
+            accumulator.received_blank_line();
         } else {
             match RequestRecord::parse(&line) {
                 Some(record) => accumulator.add_request(record),
-                None => accumulator.increment_malformed_input_count(),
+                None => accumulator.received_malformed_input(),
             }
         }
 

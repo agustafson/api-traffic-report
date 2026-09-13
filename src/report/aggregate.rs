@@ -81,15 +81,15 @@ impl ReportAccumulator {
         }
     }
 
-    pub(super) fn increment_line_count(&mut self) {
+    pub(super) fn received_line(&mut self) {
         self.report.total_line_count += 1;
     }
 
-    pub(super) fn increment_blank_line_count(&mut self) {
+    pub(super) fn received_blank_line(&mut self) {
         self.report.ignored_blank_line_count += 1;
     }
 
-    pub(super) fn increment_malformed_input_count(&mut self) {
+    pub(super) fn received_malformed_input(&mut self) {
         self.report.processed_line_count += 1;
         self.report.malformed_input_count += 1;
     }
