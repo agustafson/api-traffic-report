@@ -14,9 +14,18 @@ The command accepts exactly one positional file path. It writes exactly one JSON
 
 ## End-to-end design
 
-The command opens the supplied file and reads it one line at a time. Blank lines are counted and ignored; each nonblank line is parsed as a JSON object and validated as a request record. Valid records update two in-memory aggregates: a traffic cube keyed by `(client_id, endpoint, status_code)` and a fixed UTC ten-second bucket count keyed by `(client_id, bucket)`. After the input ends, the bucket counts are reduced into rate-limit summaries and all aggregates are emitted as the report.
+- The command opens the supplied file and reads it one line at a time.
+- Blank lines are counted and ignored; each nonblank line is parsed as a JSON object and validated as a request record. 
+- Valid records update two in-memory aggregates: a traffic cube keyed by `(client_id, endpoint, status_code)` and a fixed UTC ten-second bucket count keyed by `(client_id, bucket)`.
+- After the input ends, the bucket counts are reduced into rate-limit summaries and all aggregates are emitted as the report.
 
 This keeps the public interface deliberately small: the input file path, process exit status, standard output JSON, and standard error diagnostics are the complete CLI contract.
+
+## Rate-limit rules
+- One globally configured policy applies to every client.
+- Version 1 does not need command-line configuration or a configuration file.
+- The limit is five requests per fixed, UTC-aligned ten-second bucket, with a bucket start included and its end excluded.
+- A client is evaluated across every endpoint and provider.
 
 ## JSON report schema
 
@@ -61,7 +70,6 @@ This is the active decision log for the exercise. It records deliberate interpre
 - **Input contract:** The program accepts one required positional log-file path. Standard input is not an input mode. File and command-line errors are reported on standard error with a non-zero exit status.
 - **Client identity:** `client_id` is globally consistent across all upstream providers. A client rate limit therefore covers that client's traffic across every endpoint and provider.
 - **Request ID scope**: `request_id` is not assumed globally unique across upstream providers; it may be unique only within a provider. Because the input has no provider identifier, v1 treats `request_id` as opaque and does not deduplicate records.
-- **Rate-limit scope:** One globally configured policy applies to every client. Version 1 does not need command-line configuration or a configuration file. The limit is five requests per fixed, UTC-aligned ten-second bucket, with a bucket start included and its end excluded. A client is evaluated across every endpoint and provider.
 - **Why this policy:** A globally consistent client identity makes a client-wide policy meaningful even when requests arrive from different providers. A fixed UTC-aligned ten-second bucket makes the first version simple, deterministic, and directly explainable in a report while still detecting bursts across endpoints.
 - **Rate-limit reporting:** The report distinguishes client-time-bucket violations from excess requests. A violating client bucket is counted once when its request count exceeds five; its excess request count is the amount above five. Neither metric claims that an upstream request was blocked.
 - **Traffic aggregation:** Request counts are grouped by the exact `client_id`, `endpoint`, and `status_code` combination. The traffic cube contains only those grouping keys and `request_count`; report consumers can roll its rows up to client, endpoint, or status-code views as needed. Client-wide rate-limit metrics remain in a separate client summary because the policy covers all client endpoints together.
@@ -80,11 +88,14 @@ This is the active decision log for the exercise. It records deliberate interpre
 
 ## Future improvements
 
-- Support client-specific rate-limit policies.
+- Support client-specific rate-limit policies via alternate strategies.
 - Add source-aware idempotency or duplicate detection.
-- Support bounded-memory aggregation for exceptionally high-cardinality clients and traffic groups, such as an external store or sorted spill files.
-- Add operator-selected report formats, configuration, and clearer machine-readable error categories only if the CLI contract grows to need them.
+- Support bounded-memory aggregation for exceptionally high-cardinality clients and traffic groups, such as an external store or sorted spill files: a file with millions of distinct (client, endpoint, status) groups or (client, UTC bucket) pairs creates millions of map entries, potentially approaching raw-file memory use.
+- Externalise configuration such as parameters for rate-limiting.
 - Extend the deterministic end-to-end coverage with additional reviewable fixtures for every malformed field and bucket boundary.
+- Add `AGENTS.md`, `CLAUDE.md` & `CODING_STANDARDS.md` to store AI & huma guidance for the codebase. 
+- Parallel file processing: Split JSONL only on line boundaries, let workers build local aggregates, then merge. For the current fixed-bucket policy, merging (client_id, bucket) counts before evaluating the limit is correct. Sharding by client_id is even better: every client’s rate state lands on one worker.
+- Persistence: if reports need to be generated later or over a continuous stream. Store either raw normalized request events, aggregates, or both. Raw events preserve flexibility for new analyses; bucketed aggregates cost less but cannot answer arbitrary new questions later.
 
 ## Verification approach
 
@@ -95,4 +106,5 @@ This is the active decision log for the exercise. It records deliberate interpre
 
 ## AI assistance disclosure
 
-Codex/AI assisted with requirement analysis, paired-TDD coordination, and implementation. The work remains subject to user review.
+- Codex/Claude/AI assisted with requirement analysis, paired-TDD coordination, and implementation. The work remains subject to user review.
+- Used a custom [agustafson/skills/tdd-pair](https://github.com/agustafson/skills/tree/main/tdd-pair) skill which uses separate agents to write the tests and implementation. 
